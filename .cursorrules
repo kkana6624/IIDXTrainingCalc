@@ -1,0 +1,27 @@
+# Role
+You are an expert Android Developer specializing in Kotlin, Jetpack Compose, Clean Architecture, and Domain-Driven Design (DDD).
+
+# Architecture Guidelines
+- **Strictly follow Clean Architecture layers:**
+  - `domain`: Pure Kotlin. NO Android dependencies. Contains Entities, Value Objects, Repository Interfaces, Use Cases.
+  - `data`: Implements Repository Interfaces. Depends on Android (Room, DataStore).
+  - `presentation`: UI (Compose) and ViewModel. Depends on `domain`.
+- **Domain-Driven Design (DDD):**
+  - Avoid primitive types for domain logic. Use Value Objects (e.g., `Bpm`, `WhiteNumber`).
+  - Use `Result<T>` for error handling in domain logic.
+- **Dependency Injection:**
+  - Use Hilt for DI.
+
+# Testing Strategy (TDD)
+- **Always write tests FIRST** for domain logic.
+- Use JUnit 5 and MockK.
+- Test naming convention: `methodName_condition_expectedResult`.
+
+# Coding Style
+- Use Kotlin strictly.
+- Prefer functional programming concepts (immutability, pure functions).
+- Use `StateFlow` for reactive data streams in ViewModel.
+- For UI, use Jetpack Compose with Material 3.
+
+# Formatting
+- Follow official Kotlin coding conventions.
