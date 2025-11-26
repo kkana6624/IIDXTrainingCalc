@@ -13,6 +13,8 @@ class GreenNumberCalculator {
      *
      * 計算式:
      * RequiredHiSpeed = (174 * (1000 - WhiteNumber)) / ((BaseBPM * PlaybackRate) * TargetGreenNumber)
+     * 
+     * Note: 精度向上のため内部計算は Double (64bit) で行います。
      */
     fun calculate(
         baseBpm: Bpm,
@@ -21,15 +23,18 @@ class GreenNumberCalculator {
         targetGreenNumber: TargetGreenNumber
     ): Result<HiSpeed> {
         return try {
-            val numerator = 174.0f * (1000 - whiteNumber.value)
-            val denominator = (baseBpm.value * playbackRate.value) * targetGreenNumber.value
+            // Use Double for calculation to minimize floating point errors
+            val numerator = 174.0 * (1000 - whiteNumber.value)
+            val denominator = (baseBpm.value.toDouble() * playbackRate.value.toDouble()) * targetGreenNumber.value.toDouble()
             
-            if (denominator == 0.0f) {
+            if (denominator == 0.0) {
                 return Result.failure(ArithmeticException("Denominator is zero, cannot calculate HiSpeed."))
             }
 
             val requiredHiSpeedValue = numerator / denominator
-            HiSpeed.create(requiredHiSpeedValue)
+            
+            // Convert back to Float for the Value Object
+            HiSpeed.create(requiredHiSpeedValue.toFloat())
         } catch (e: Exception) {
             Result.failure(e)
         }

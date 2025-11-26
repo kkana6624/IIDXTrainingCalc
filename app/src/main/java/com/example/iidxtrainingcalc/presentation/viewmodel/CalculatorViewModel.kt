@@ -23,6 +23,11 @@ class CalculatorViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(CalculatorUiState())
     val uiState: StateFlow<CalculatorUiState> = _uiState.asStateFlow()
 
+    init {
+        // Perform initial calculation with default values
+        calculate()
+    }
+
     fun onEvent(event: CalculatorUiEvent) {
         when (event) {
             is CalculatorUiEvent.OnBaseBpmChanged -> {

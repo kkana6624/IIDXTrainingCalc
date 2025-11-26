@@ -23,6 +23,10 @@ android {
 
     buildTypes {
         release {
+            // Configuration to allow "Run" button to install Release build directly
+            // (Uses the default debug.keystore for signing, convenient for performance testing)
+            signingConfig = signingConfigs.getByName("debug")
+            
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -59,7 +63,7 @@ dependencies {
     
     // Hilt
     implementation(libs.hilt.android)
-    implementation(libs.androidx.hilt.navigation.compose) // Added Hilt Navigation Compose
+    implementation(libs.androidx.hilt.navigation.compose)
     kapt(libs.hilt.compiler)
 
     // Android Test

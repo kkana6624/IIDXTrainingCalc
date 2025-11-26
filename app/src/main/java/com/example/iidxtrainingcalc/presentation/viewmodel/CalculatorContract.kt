@@ -6,9 +6,10 @@ import com.example.iidxtrainingcalc.domain.model.PlaybackRate
  * UI State for the Calculator Screen
  */
 data class CalculatorUiState(
-    val baseBpm: String = "",
-    val whiteNumber: String = "",
-    val targetGreenNumber: String = "",
+    // Initialize with default values to ensure immediate calculation at startup
+    val baseBpm: String = "150",
+    val whiteNumber: String = "200",
+    val targetGreenNumber: String = "300",
     val playbackRate: Float = 1.0f,
     
     // Calculated Result

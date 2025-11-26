@@ -13,9 +13,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -30,6 +32,20 @@ fun CalculatorScreen(
     viewModel: CalculatorViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+
+    // Stabilize callbacks to prevent unnecessary recomposition of all pickers when one changes
+    val onBaseBpmChange = remember(viewModel) {
+        { valStr: Int -> viewModel.onEvent(CalculatorUiEvent.OnBaseBpmChanged(valStr.toString())) }
+    }
+    val onGreenNumberChange = remember(viewModel) {
+        { valStr: Int -> viewModel.onEvent(CalculatorUiEvent.OnTargetGreenNumberChanged(valStr.toString())) }
+    }
+    val onWhiteNumberChange = remember(viewModel) {
+        { valStr: Int -> viewModel.onEvent(CalculatorUiEvent.OnWhiteNumberChanged(valStr.toString())) }
+    }
+    val onPlaybackRateChange = remember(viewModel) {
+        { valFloat: Float -> viewModel.onEvent(CalculatorUiEvent.OnPlaybackRateChanged(valFloat)) }
+    }
 
     Column(
         modifier = Modifier
@@ -50,15 +66,15 @@ fun CalculatorScreen(
         LabeledWheelPicker(
             label = "Base BPM",
             value = state.baseBpm.toIntOrNull() ?: 150,
-            onValueChange = { viewModel.onEvent(CalculatorUiEvent.OnBaseBpmChanged(it.toString())) },
-            range = 1..999
+            onValueChange = onBaseBpmChange,
+            range = 1..500
         )
 
         // Target Green Number
         LabeledWheelPicker(
             label = "Target Green Number",
             value = state.targetGreenNumber.toIntOrNull() ?: 300,
-            onValueChange = { viewModel.onEvent(CalculatorUiEvent.OnTargetGreenNumberChanged(it.toString())) },
+            onValueChange = onGreenNumberChange,
             range = 1..999
         )
 
@@ -66,14 +82,14 @@ fun CalculatorScreen(
         LabeledWheelPicker(
             label = "White Number (SUD+)",
             value = state.whiteNumber.toIntOrNull() ?: 200,
-            onValueChange = { viewModel.onEvent(CalculatorUiEvent.OnWhiteNumberChanged(it.toString())) },
+            onValueChange = onWhiteNumberChange,
             range = 0..1000
         )
 
         // Playback Rate Selector
         PlaybackRateSelector(
             currentRate = state.playbackRate,
-            onRateSelected = { viewModel.onEvent(CalculatorUiEvent.OnPlaybackRateChanged(it)) }
+            onRateSelected = onPlaybackRateChange
         )
 
         // Error Display (Global calculation errors)
@@ -96,12 +112,13 @@ fun LabeledWheelPicker(
     onValueChange: (Int) -> Unit,
     range: IntRange
 ) {
-    // LazyListState for free scrolling physics
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = value - range.first)
-    // SnapFlingBehavior provides the "Drum Roll" snapping effect with fast scrolling support
     val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
+    
+    val updatedOnValueChange by rememberUpdatedState(onValueChange)
+    val updatedValue by rememberUpdatedState(value)
 
-    // Sync external value changes (e.g. reset)
+    // Sync external value changes
     LaunchedEffect(value) {
         val targetIndex = value - range.first
         if (listState.firstVisibleItemIndex != targetIndex && !listState.isScrollInProgress) {
@@ -109,17 +126,17 @@ fun LabeledWheelPicker(
         }
     }
 
-    // Sync internal scroll changes to callback
+    // Sync internal scroll changes
     LaunchedEffect(listState) {
         snapshotFlow { listState.firstVisibleItemIndex }.collect { index ->
             val selectedValue = range.first + index
-            if (selectedValue in range) {
-                onValueChange(selectedValue)
+            if (selectedValue in range && selectedValue != updatedValue) {
+                updatedOnValueChange(selectedValue)
             }
         }
     }
 
-    // Derive the current center item for styling
+    // Efficiently determine center index without triggering heavy recomposition logic
     val currentCenteredIndex by remember { derivedStateOf { listState.firstVisibleItemIndex } }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -136,44 +153,55 @@ fun LabeledWheelPicker(
                 .width(120.dp),
             contentAlignment = Alignment.Center
         ) {
-            // The Wheel (LazyColumn)
             LazyColumn(
                 state = listState,
                 flingBehavior = flingBehavior,
-                contentPadding = PaddingValues(vertical = 40.dp), // (120dp height - 40dp item) / 2 = 40dp padding to center
+                contentPadding = PaddingValues(vertical = 40.dp),
                 modifier = Modifier.fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                items(range.count()) { index ->
+                items(
+                    count = range.count(),
+                    key = { index -> range.first + index }
+                ) { index ->
                     val num = range.first + index
                     val isSelected = (currentCenteredIndex == index)
 
                     Box(
                         modifier = Modifier
-                            .height(40.dp) // Fixed height item
+                            .height(40.dp)
                             .fillMaxWidth(),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = num.toString(),
-                            style = if (isSelected) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.titleMedium,
-                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            style = MaterialTheme.typography.headlineMedium,
+                            // Efficient Styling: Use graphicsLayer for Scale/Alpha (GPU) instead of changing FontSize (CPU Layout)
+                            // This maintains high performance while providing visual feedback
+                            modifier = Modifier.graphicsLayer {
+                                val scale = if (isSelected) 1.15f else 0.8f
+                                val alphaValue = if (isSelected) 1.0f else 0.3f
+                                scaleX = scale
+                                scaleY = scale
+                                alpha = alphaValue
+                            },
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center
                         )
                     }
                 }
             }
 
-            // Selection Indicators (Overlay)
+            // Selection Indicators
             HorizontalDivider(
                 modifier = Modifier.align(Alignment.TopCenter).offset(y = 40.dp),
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.primary,
                 thickness = 2.dp
             )
             HorizontalDivider(
                 modifier = Modifier.align(Alignment.BottomCenter).offset(y = (-40).dp),
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.primary,
                 thickness = 2.dp
             )
         }
