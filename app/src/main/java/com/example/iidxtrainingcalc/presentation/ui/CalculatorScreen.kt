@@ -1,15 +1,18 @@
 package com.example.iidxtrainingcalc.presentation.ui
 
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.VerticalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -93,26 +96,31 @@ fun LabeledWheelPicker(
     onValueChange: (Int) -> Unit,
     range: IntRange
 ) {
-    // PagerState to control the drum roll
-    val pagerState = rememberPagerState(initialPage = value - range.first) {
-        range.last - range.first + 1
-    }
+    // LazyListState for free scrolling physics
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = value - range.first)
+    // SnapFlingBehavior provides the "Drum Roll" snapping effect with fast scrolling support
+    val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
 
-    // Sync external value changes to the picker (e.g. reset)
+    // Sync external value changes (e.g. reset)
     LaunchedEffect(value) {
-        val targetPage = value - range.first
-        if (pagerState.currentPage != targetPage && !pagerState.isScrollInProgress) {
-            pagerState.animateScrollToPage(targetPage)
+        val targetIndex = value - range.first
+        if (listState.firstVisibleItemIndex != targetIndex && !listState.isScrollInProgress) {
+            listState.scrollToItem(targetIndex)
         }
     }
 
-    // Sync picker changes to the callback
-    LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.currentPage }.collect { page ->
-            val selectedValue = range.first + page
-            onValueChange(selectedValue)
+    // Sync internal scroll changes to callback
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex }.collect { index ->
+            val selectedValue = range.first + index
+            if (selectedValue in range) {
+                onValueChange(selectedValue)
+            }
         }
     }
+
+    // Derive the current center item for styling
+    val currentCenteredIndex by remember { derivedStateOf { listState.firstVisibleItemIndex } }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
@@ -128,7 +136,36 @@ fun LabeledWheelPicker(
                 .width(120.dp),
             contentAlignment = Alignment.Center
         ) {
-            // Selection Indicators (Lines)
+            // The Wheel (LazyColumn)
+            LazyColumn(
+                state = listState,
+                flingBehavior = flingBehavior,
+                contentPadding = PaddingValues(vertical = 40.dp), // (120dp height - 40dp item) / 2 = 40dp padding to center
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                items(range.count()) { index ->
+                    val num = range.first + index
+                    val isSelected = (currentCenteredIndex == index)
+
+                    Box(
+                        modifier = Modifier
+                            .height(40.dp) // Fixed height item
+                            .fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = num.toString(),
+                            style = if (isSelected) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.titleMedium,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+
+            // Selection Indicators (Overlay)
             HorizontalDivider(
                 modifier = Modifier.align(Alignment.TopCenter).offset(y = 40.dp),
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
@@ -139,29 +176,6 @@ fun LabeledWheelPicker(
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
                 thickness = 2.dp
             )
-
-            // The Wheel
-            VerticalPager(
-                state = pagerState,
-                contentPadding = PaddingValues(vertical = 40.dp), // Centers the selected item
-                modifier = Modifier.fillMaxSize()
-            ) { page ->
-                val num = range.first + page
-                val isSelected = (pagerState.currentPage == page)
-
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = num.toString(),
-                        style = if (isSelected) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.titleMedium,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
         }
     }
 }
