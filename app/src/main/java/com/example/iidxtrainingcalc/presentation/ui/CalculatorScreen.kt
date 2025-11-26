@@ -1,24 +1,25 @@
 package com.example.iidxtrainingcalc.presentation.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.VerticalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.iidxtrainingcalc.presentation.viewmodel.CalculatorUiEvent
 import com.example.iidxtrainingcalc.presentation.viewmodel.CalculatorViewModel
+import java.util.Locale
 import kotlin.math.roundToInt
 
 @Composable
@@ -42,29 +43,28 @@ fun CalculatorScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Input Fields
-        NumberInputField(
+        // Base BPM
+        LabeledWheelPicker(
             label = "Base BPM",
-            value = state.baseBpm,
-            onValueChange = { viewModel.onEvent(CalculatorUiEvent.OnBaseBpmChanged(it)) },
-            error = state.baseBpmError,
-            modifier = Modifier.fillMaxWidth()
+            value = state.baseBpm.toIntOrNull() ?: 150,
+            onValueChange = { viewModel.onEvent(CalculatorUiEvent.OnBaseBpmChanged(it.toString())) },
+            range = 1..999
         )
 
-        NumberInputField(
+        // Target Green Number
+        LabeledWheelPicker(
             label = "Target Green Number",
-            value = state.targetGreenNumber,
-            onValueChange = { viewModel.onEvent(CalculatorUiEvent.OnTargetGreenNumberChanged(it)) },
-            error = state.targetGreenNumberError,
-            modifier = Modifier.fillMaxWidth()
+            value = state.targetGreenNumber.toIntOrNull() ?: 300,
+            onValueChange = { viewModel.onEvent(CalculatorUiEvent.OnTargetGreenNumberChanged(it.toString())) },
+            range = 1..999
         )
 
-        NumberInputField(
+        // White Number (SUD+)
+        LabeledWheelPicker(
             label = "White Number (SUD+)",
-            value = state.whiteNumber,
-            onValueChange = { viewModel.onEvent(CalculatorUiEvent.OnWhiteNumberChanged(it)) },
-            error = state.whiteNumberError,
-            modifier = Modifier.fillMaxWidth()
+            value = state.whiteNumber.toIntOrNull() ?: 200,
+            onValueChange = { viewModel.onEvent(CalculatorUiEvent.OnWhiteNumberChanged(it.toString())) },
+            range = 0..1000
         )
 
         // Playback Rate Selector
@@ -73,13 +73,95 @@ fun CalculatorScreen(
             onRateSelected = { viewModel.onEvent(CalculatorUiEvent.OnPlaybackRateChanged(it)) }
         )
 
-        // Error Display
+        // Error Display (Global calculation errors)
         if (state.calculationError != null) {
             Text(
                 text = state.calculationError!!,
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium
             )
+        }
+        
+        Spacer(modifier = Modifier.height(32.dp))
+    }
+}
+
+@Composable
+fun LabeledWheelPicker(
+    label: String,
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    range: IntRange
+) {
+    // PagerState to control the drum roll
+    val pagerState = rememberPagerState(initialPage = value - range.first) {
+        range.last - range.first + 1
+    }
+
+    // Sync external value changes to the picker (e.g. reset)
+    LaunchedEffect(value) {
+        val targetPage = value - range.first
+        if (pagerState.currentPage != targetPage && !pagerState.isScrollInProgress) {
+            pagerState.animateScrollToPage(targetPage)
+        }
+    }
+
+    // Sync picker changes to the callback
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }.collect { page ->
+            val selectedValue = range.first + page
+            onValueChange(selectedValue)
+        }
+    }
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        Box(
+            modifier = Modifier
+                .height(120.dp)
+                .width(120.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            // Selection Indicators (Lines)
+            HorizontalDivider(
+                modifier = Modifier.align(Alignment.TopCenter).offset(y = 40.dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                thickness = 2.dp
+            )
+            HorizontalDivider(
+                modifier = Modifier.align(Alignment.BottomCenter).offset(y = (-40).dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                thickness = 2.dp
+            )
+
+            // The Wheel
+            VerticalPager(
+                state = pagerState,
+                contentPadding = PaddingValues(vertical = 40.dp), // Centers the selected item
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val num = range.first + page
+                val isSelected = (pagerState.currentPage == page)
+
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = num.toString(),
+                        style = if (isSelected) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.titleMedium,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
         }
     }
 }
@@ -104,39 +186,13 @@ fun ResultDisplay(hiSpeed: Float?) {
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
             Text(
-                text = if (hiSpeed != null) String.format("%.2f", hiSpeed) else "---",
+                text = if (hiSpeed != null) String.format(Locale.US, "%.2f", hiSpeed) else "---",
                 style = MaterialTheme.typography.displayLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
         }
     }
-}
-
-@Composable
-fun NumberInputField(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    error: String?,
-    modifier: Modifier = Modifier
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = { 
-            // Only allow numeric input
-            if (it.all { char -> char.isDigit() }) {
-                onValueChange(it) 
-            }
-        },
-        label = { Text(label) },
-        isError = error != null,
-        supportingText = { if (error != null) Text(error) },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        singleLine = true,
-        modifier = modifier,
-        textStyle = MaterialTheme.typography.headlineSmall
-    )
 }
 
 @Composable
@@ -180,7 +236,7 @@ fun PlaybackRateSelector(
             steps = 19 // (1.5 - 0.5) / 0.05 - 1 = 19 steps
         )
         Text(
-            text = "Current: x${String.format("%.2f", currentRate)}",
+            text = "Current: x${String.format(Locale.US, "%.2f", currentRate)}",
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.align(Alignment.End)
         )

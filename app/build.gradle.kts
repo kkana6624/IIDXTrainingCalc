@@ -59,6 +59,7 @@ dependencies {
     
     // Hilt
     implementation(libs.hilt.android)
+    implementation(libs.androidx.hilt.navigation.compose) // Added Hilt Navigation Compose
     kapt(libs.hilt.compiler)
 
     // Android Test
